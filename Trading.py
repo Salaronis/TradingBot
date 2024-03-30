@@ -16,23 +16,33 @@ ALPACA_CREDS = {
 }
 
 class MLTrades(Strategy):
-    def initialize(self, symbol:str="SPY"):
+    def initialize(self, symbol:str="SPY", cash_at_risk:float=.5):
         self.symbol = symbol
         self.sleeptime = "24H"
         self.last_trade = None
+        self.cash_at_risk = cash_at_risk
+    def pos_sizing(self):
+        cash = self.get_cash()
+        last_price = self.get_last_price(self.symbol)
+        quantity = round(cash * self.cash_at_risk / last_price)
+        return cash,last_price , quantity
     def on_trading_iteration(self):
-        if self.last_trade == None:
-            order = self.create_order(
-                self.symbol,
-                10,
-                "buy",
-                type = "market"
-            )
-            self.submit_order(order)
-            self.last_trade = "buy"
+        cash , last_price, quantity = self.pos_sizing()
+        if cash > last_price:
+            if self.last_trade == None:
+                order = self.create_order(
+                    self.symbol,
+                    quantity,
+                    "buy",
+                    type = "bracket",
+                    take_profit_price= last_price*1.2,
+                    stop_loss_price= last_price * .95
+                )
+                self.submit_order(order)
+                self.last_trade = "buy"
 
 broker = Alpaca(ALPACA_CREDS)  
-strat = MLTrades(name='mlstrat', broker = broker, parameteres = {})
+strat = MLTrades(name='mlstrat', broker = broker, parameteres = {"symbol":"SPY","cash_at_risk":.5})
 
 #Back Testing Functions
 start_date = datetime(2023,12,15)
@@ -42,5 +52,5 @@ strat.backtest(
     YahooDataBacktesting,
     start_date,
     end_date,
-    parameters={}
+    parameters={"symbol":"SPY","cash_at_risk":.5}
 )
